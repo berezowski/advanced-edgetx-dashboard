@@ -27,7 +27,11 @@ local function getTelemeValues()
     rfmd = getValue('RMFD')
 
     -- Check if GPS telemetry exists and get position
-    gps = getFieldInfo('GPS') and getValue('GPS') or false
+    if shared.switchSettings.gps.switch ~= 'Disabled' then
+      gps = getFieldInfo('GPS') and getValue('GPS') or false
+    else 
+      gps = false
+    end
 
     -- Get RX signal strength source
     lq = getValue(shared.otherSettings.link.link_quality)
@@ -51,11 +55,6 @@ local function getTelemeValues()
     pwr = getValue('TPWR')
     --pwr = getValue('Tmp1')
 
-    -- Get mode input
-    acro = getValue(shared.switchSettings.acro.switch)
-    angle = getValue(shared.switchSettings.angle.switch)
-    horizon = getValue(shared.switchSettings.horizon.switch)
-    turtle = getValue(shared.switchSettings.turtle.switch)
 end
 
 -- Here are the draw functions
@@ -130,6 +129,12 @@ local function drawPropellor(x, y, invert)
     end
 end
 
+local function drawDot(x,y)
+  lcd.drawFilledRectangle(x, y, 3, 3, ERASE)
+  lcd.drawFilledRectangle(x+1, y-1, 1, 5, ERASE)
+  lcd.drawFilledRectangle(x-1, y+1, 5, 1, ERASE)
+end
+
 -- Draw quad
 local function drawQuadcopter(x, y)
     -- A little frame counter to help prop drawing
@@ -146,9 +151,28 @@ local function drawQuadcopter(x, y)
     lcd.drawLine(x + 5, y + 26, x + 26, y + 5, SOLID, FORCE)
 
     -- Middle of Quad
-    lcd.drawRectangle(x + 11, y + 11, 9, 9, SOLID)
-    lcd.drawRectangle(x + 12, y + 12, 7, 7, SOLID)
-    lcd.drawRectangle(x + 13, y + 13, 5, 5, SOLID)
+    lcd.drawFilledRectangle(x + 10, y + 10, 11, 11, FORCE)
+    
+    
+    
+    if shared.pitmode then
+      -- Increase Body
+      lcd.drawFilledRectangle(x + 8, y + 8, 15, 15, ERASE)
+      lcd.drawFilledRectangle(x + 10, y + 10, 11, 11, FORCE)
+      lcd.drawFilledRectangle(x + 12, y + 9, 7, 13, FORCE)
+      lcd.drawFilledRectangle(x + 9, y + 12, 13, 7, FORCE)
+      --lcd.drawFilledRectangle(x + 12, y + 9, 7, 13, FORCE)
+      -- Blind Dots / Pit Mode
+      drawDot(x + 11, y + 13)
+      drawDot(x + 17, y + 12)
+      drawDot(x + 15, y + 17)
+      
+      
+      --lcd.drawFilledRectangle(x + 17, y + 12, 3, 3, ERASE)
+      
+      --lcd.drawText(x+11, y + 11, '+', SMLSIZE + INVERS)
+      --lcd.drawFilledRectangle(x + 14, y + 16, 3, 3, ERASE)
+    end
 
     -- Draw propellors [top left, bottom right, top right, bottom left]
     drawPropellor(x, y, false)
@@ -157,9 +181,10 @@ local function drawQuadcopter(x, y)
     drawPropellor(x, y + 20, true)
 
     -- ARMED text
-    if shared.isArmed then
-        lcd.drawText(x + 3, y + 12, 'ARMED', SMLSIZE + BLINK)
-    end
+    --if shared.isArmed then
+    --    lcd.drawText(x + 3, y + 12, 'ARMED', SMLSIZE + BLINK)
+    --end
+    -- Prop Animation is enough ?
 
     if shared.noConnectionMSG then
         lcd.drawText(x, y + 12, 'NO QUAD', SMLSIZE + BLINK)
@@ -246,13 +271,13 @@ end
 -- Draw mode name
 local function drawModeTitle(x, y)
     -- FM
-    if (turtle + 1024) / 20.48 == shared.switchSettings.turtle.target and shared.switchSettings.turtle.switch ~= 'None' then
+    if isPressed(shared.switchSettings.turtle) then
         modeText = 'Turtle'
-    elseif (angle + 1024) / 20.48 == shared.switchSettings.angle.target and shared.switchSettings.angle.switch ~= 'None' then
+    elseif isPressed(shared.switchSettings.angle) then
         modeText = 'Angle'
-    elseif (horizon + 1024) / 20.48 == shared.switchSettings.horizon.target and shared.switchSettings.horizon.switch ~= 'None' then
+    elseif isPressed(shared.switchSettings.horizon) then
         modeText = 'Horizon'
-    elseif (acro + 1024) / 20.48 == shared.switchSettings.acro.target and shared.switchSettings.acro.switch ~= 'None' then
+    elseif isPressed(shared.switchSettings.acro) then
         modeText = 'Acro'
     else
         modeText = 'Acro'
@@ -424,17 +449,36 @@ end
 
 function shared.run(event)
     lcd.clear()
-
-    -- Change screen if PAGE button is pressed
-    if event == EVT_EXIT_BREAK then
-        if screeb == 2 and not shared.crsf then
-            screeb = 4
-        else
-            screeb = screeb + 1
-        end
-        if screeb > 4 then
-            screeb = 1
-        end
+    local direction = 0
+    
+    -- reset session timer
+    if event == EVT_ROT_BREAK then
+      resetGlobalTimer('session')
+    end
+    
+    -- Change screen
+    if event == EVT_ROT_RIGHT then
+      direction = 1
+    end
+    if event == EVT_ROT_LEFT then
+      direction = -1
+    end
+    screeb = screeb + direction
+    
+    -- loop
+    if screeb > 4 then
+      screeb = 1
+    end
+    if screeb < 1 then
+      screeb = 4
+    end
+    
+    -- skip disabled screens
+    if screeb == 2 and not shared.crsf then
+      screeb = screeb + direction
+    end
+    if screeb == 4 and shared.switchSettings.gps.switch == 'Disabled' then
+      screeb = screeb + direction
     end
 
     -- Get telemetry values
@@ -446,7 +490,7 @@ function shared.run(event)
     -- Draw a horizontal line seperating the header
     lcd.drawLine(0, 7, screen.w - 1, 7, SOLID, FORCE)
 
-    if event == EVT_ROT_BREAK then
+    if event == EVT_MENU_BREAK then
         shared.changeScreen(1)
     end
 

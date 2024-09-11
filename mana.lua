@@ -29,16 +29,19 @@ shared.timerLeft = 0
 shared.timerMax = 0
 local armed = 0
 local prearmed = 0
+shared.pitmode = false
 shared.modelName = 'Unknown'
 
 -- No modificar / don't modify
 shared.switchSettigs = {
-    arm = {switch = 'sf', target = 100},
-    prearm = {switch = 'sd', target = 100},
-    acro = {switch = 'sc', target = 0},
-    angle = {switch = 'sc', target = 50},
-    horizon = {switch = 'None', target = 0},
-    turtle = {switch = 'sc', target = 100}
+    arm = {switch = 'sa', target = 100},
+    prearm = {switch = 'Disabled', target = 100},
+    acro = {switch = 'Disabled', target = 0},
+    angle = {switch = 'Disabled', target = 50},
+    horizon = {switch = 'Disabled', target = 0},
+    turtle = {switch = 'Disabled', target = 100},
+    pitmode = {switch = 'Disabled', target = 100},
+    gps = {switch = 'Disabled', target = 100}
 }
 
 -- Various variables
@@ -115,6 +118,16 @@ local function getTelemeParameters()
     end
 end
 
+function isPressed(input)
+  return  input.switch == 'On' 
+          or input.switch ~= 'Disabled' 
+          and (getValue(input.switch) + 1024) / 20.48 == input.target
+end
+
+function isEnabled(input)
+  return input.switch ~= 'Disabled'
+end
+
 local function init()
     shared.crsf = crossfireTelemetryPush() ~= nil
     shared.ghost = ghostTelemetryPush() ~= nil
@@ -157,37 +170,51 @@ local function run(event)
         end
     end
 
-    -- PREARM switch source
-    prearmed = getValue(shared.switchSettings.prearm.switch)
-
-    -- ARM switch source
-    armed = getValue(shared.switchSettings.arm.switch)
-
-    if (armed + 1024) / 20.48 == shared.switchSettings.arm.target and shared.rssi == 0 and shared.switchSettings.arm.switch ~= 'None' then
+    if isPressed(shared.switchSettings.pitmode) then
+      shared.pitmode = true
+    else
+      shared.pitmode = false
+    end
+    
+    
+    if isPressed(shared.switchSettings.arm) and shared.rssi == 0 then
         shared.noConnectionMSG = true
     else
         shared.noConnectionMSG = false
     end
 
-    if (armed + 1024) / 20.48 == shared.switchSettings.arm.target and shared.rssi ~= 0 and (shared.isPrearmed or shared.isArmed) and shared.switchSettings.arm.switch ~= 'None' then
-        shared.isArmed = true
-    elseif (armed + 1024) / 20.48 == shared.switchSettings.arm.target and shared.rssi ~= 0 and not shared.isPrearmed then
-        shared.isArmed = false
+    -- arm / prearm checks
+    if isEnabled(shared.switchSettings.prearm) and shared.rssi ~= 0 then
+      shared.noPrearm = false 
+      
+      if isPressed(shared.switchSettings.prearm) then
+          shared.isPrearmed = true
+      else
+          shared.isPrearmed = false
+      end
+    
+      if shared.isPrearmed 
+        or shared.isArmed
+        and isPressed(shared.switchSettings.arm)
+        then
+          shared.isArmed = true
+      else
         shared.noPrearm = true
-    else
         shared.isArmed = false
-        shared.noPrearm = false
-    end
-
-    -- Check if quad is armed by a switch
-    if ((prearmed + 1024) / 20.48 == shared.switchSettings.prearm.target) and not ((armed + 1024) / 20.48 == shared.switchSettigs.arm.target and not shared.isArmed) or (shared.switchSettings.prearm.switch == 'None') then
-        shared.isPrearmed = true
-    else
-        shared.isPrearmed = false
-    end
+      end
+    else -- prearm disabled
+      if isPressed(shared.switchSettings.arm)
+        and (shared.isPrearmed or shared.isArmed)
+        and shared.rssi ~= 0 
+      then
+        shared.isArmed = true
+      else
+        shared.isArmed = false
+      end
+    end -- end arming checks
+    
 end
-
-
+  
 local function background()
     local timerName = timer - 1
 
