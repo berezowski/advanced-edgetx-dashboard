@@ -29,7 +29,7 @@ Advanced lua-based dashboard for the EdgeTX Monochrome LCD Transmitters
 * Even more modified Script by mvaldesshc
 * Git : https://github.com/mvaldesshc/advanced-edgetx-dashboard
 * Further modified Script (this one) by Hubert Berezowski
-* Git : https://github.com/berezowski/advanced-edgetx-dashboard
+* Git : [https://github.com/berezowski/edgetx-dashboard](https://github.com/berezowski/edgetx-dashboard)
 
 ## Installing
 
