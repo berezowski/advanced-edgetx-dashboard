@@ -151,7 +151,7 @@ local function drawQuadcopter(x, y)
     lcd.drawLine(x + 5, y + 26, x + 26, y + 5, SOLID, FORCE)
 
     -- Middle of Quad
-    lcd.drawFilledRectangle(x + 10, y + 10, 11, 11, FORCE)
+    lcd.drawFilledRectangle(x + 12, y + 12, 8, 8, FORCE)
     
     
     
