@@ -73,12 +73,11 @@ mainMenu = {
     return not(currentOption.settings.switch == 'Disabled' or currentOption.settings.switch == 'On')
   end,
   run = function(self)
+    local linePixelHeight = 9
+    local marginToHeadline = 1
 
     -- Draw Headline
     lcd.drawText(1, 1, 'CONFIG',  LEFT + INVERS)
-
-    local linePixelHeight = 9
-    local marginToHeadline = 1
     
     -- setup pagescrolling
     if self.pagesize + self.mainMenuScroll - self.optionHoverIdx < 0 then
@@ -94,26 +93,18 @@ mainMenu = {
         currentOption = item -- store reference to item for saving / manipulation
       end
       if idx > self.mainMenuScroll then -- skip off screen items on top, off screen on bottom is irrelevant
+        ---------- THIS    xx xx --------------- e.g. 'arm'
         local offset = (idx - self.mainMenuScroll) * linePixelHeight + marginToHeadline
         lcd.drawText(2, offset, item.name) -- draw optionname e.g. 'arm'
         
+        ---------- xx    THIS xx --------------- e.g. 'sa'
         lcd.drawText(screen.w - 48, offset, string.upper(item.settings.switch), --draw swichname e.g. 'sa'
           (self.optionHoverIdx == idx and state ~= mainMenuTargetSelection) and INVERS or 0
         )
 
+        ---------- xx    xx THIS --------------- e.g. 'up'
         local targetAvailableForIteration = not( item.settings.switch == 'Disabled' or item.settings.switch == 'On' )
         if targetAvailableForIteration then
-          
-          -- update Target
-          if (self.optionHoverIdx == idx and self.editing and state == mainMenuTargetSelection) then
-            if not(danglingSetting.target) then
-              danglingSetting.target = item.settings.target
-            end
-            catch = monitor_change({item.settings.switch})
-            if catch then
-              danglingSetting.target = normalizeValue(catch.value)
-            end
-          end
 
           lcd.drawText( --draw switch target e.g. 'up'
             screen.w - 33, offset, 
@@ -194,22 +185,33 @@ switchMenu = {
 }
 
 mainMenuSwitchSelection = {
+  pagesize = mainMenu.pagesize,
+  configitems = mainMenu.configitems,
   run = function(self)
     self.optionHoverIdx = mainMenu.optionHoverIdx 
     self.mainMenuScroll = mainMenu.mainMenuScroll
-    self.pagesize = mainMenu.pagesize
-    self.configitems = mainMenu.configitems
     mainMenu.run(self) -- run mainmenu with settings from this scope
   end
 }
 
 mainMenuTargetSelection = {
   editing = false,
+  pagesize = mainMenu.pagesize,
+  configitems = mainMenu.configitems,
   run = function(self)
     self.optionHoverIdx = mainMenu.optionHoverIdx 
     self.mainMenuScroll = mainMenu.mainMenuScroll
-    self.pagesize = mainMenu.pagesize
-    self.configitems = mainMenu.configitems
+    
+    -- update Target
+    if self.editing then
+      if not(danglingSetting.target) then
+        danglingSetting.target = currentOption.settings.target
+      end
+      catch = monitor_change({currentOption.settings.switch})
+      if catch then
+        danglingSetting.target = normalizeValue(catch.value)
+      end
+    end
     mainMenu.run(self) -- run mainmenu with settings from this scope
   end
 }
