@@ -31,23 +31,35 @@ options = {
     }
 }
 local currentOption = options[1]
-local currentSubmenuSetting = {'switch', 'target'}
+local danglingSetting = {'switch', 'target'}
+function clearDanglingSettings()
+    danglingSetting = {'switch', 'target'}
+end
+local oldMonitorValues = {}
+function monitor_change(array)
+  for idx, switch in pairs(array) do
+    actual = getValue(switch)
+    if oldMonitorValues[idx] and oldMonitorValues[idx] ~= actual then
+      oldMonitorValues = {}
+      return { idx = idx, switch = switch, value = actual }
+    end
+    oldMonitorValues[idx] = actual
+  end
+end
 
 function normalizeValue(value)
   return (value + 1024) / 20.48
 end
 
-function writeSwitch()
-    currentOption.settings.switch = currentSubmenuSetting.switch
-    if currentSubmenuSetting.target then 
-      currentOption.settings.target = currentSubmenuSetting.target
-    end
-    loadfile("/SCRIPTS/TELEMETRY/saveTable.lua")(shared.switchSettings, "/SCRIPTS/TELEMETRY/savedData.txt")
-end
-
-function writeValue(value)
-    currentOption.settings.target = value
-    loadfile("/SCRIPTS/TELEMETRY/saveTable.lua")(shared.switchSettings, "/SCRIPTS/TELEMETRY/savedData.txt")
+function commitSettings()
+  if danglingSetting.switch then
+    currentOption.settings.switch = danglingSetting.switch
+  end
+  if danglingSetting.target then
+    currentOption.settings.target = danglingSetting.target
+  end
+  clearDanglingSettings()
+  loadfile("/SCRIPTS/TELEMETRY/saveTable.lua")(shared.switchSettings, "/SCRIPTS/TELEMETRY/savedData.txt")
 end
 
 mainMenu = {
@@ -55,6 +67,8 @@ mainMenu = {
   mainMenuScroll = 0,
   pagesize = 6,
   configitems = 8,
+  currentSwitch = '',
+  currentTartget = '',
   targetsAvailable = function() 
     return not(currentOption.settings.switch == 'Disabled' or currentOption.settings.switch == 'On')
   end,
@@ -83,38 +97,38 @@ mainMenu = {
         local offset = (idx - self.mainMenuScroll) * linePixelHeight + marginToHeadline
         lcd.drawText(2, offset, item.name) -- draw optionname e.g. 'arm'
         
-        lcd.drawText(screen.w - 48, offset, string.upper(item.settings.switch),  --draw swichname e.g. 'sa'
-          self.optionHoverIdx == idx and (not self.fragment or self.fragment == 'switch') and INVERS or 0
+        lcd.drawText(screen.w - 48, offset, string.upper(item.settings.switch), --draw swichname e.g. 'sa'
+          (self.optionHoverIdx == idx and state ~= mainMenuTargetSelection) and INVERS or 0
         )
-        
+
         local targetAvailableForIteration = not( item.settings.switch == 'Disabled' or item.settings.switch == 'On' )
         if targetAvailableForIteration then
           
-          if (self.optionHoverIdx == idx and self.editing and self.fragment == 'target') then
-            if not(currentSubmenuSetting.target) then
-              currentSubmenuSetting.target = item.settings.target
+          -- update Target
+          if (self.optionHoverIdx == idx and self.editing and state == mainMenuTargetSelection) then
+            if not(danglingSetting.target) then
+              danglingSetting.target = item.settings.target
             end
             catch = monitor_change({item.settings.switch})
             if catch then
-              currentSubmenuSetting.target = normalizeValue(catch.value)
+              danglingSetting.target = normalizeValue(catch.value)
             end
           end
-          
-          
+
           lcd.drawText( --draw switch target e.g. 'up'
             screen.w - 33, offset, 
             valuesMap[
-              (self.optionHoverIdx == idx and self.editing and self.fragment == 'target') 
-                --and (normalizeValue(getValue(item.settings.switch))) 
-                and currentSubmenuSetting.target
-                or item.settings.target
+              (self.optionHoverIdx == idx and self.editing and state == mainMenuTargetSelection)
+                and danglingSetting.target -- display dangling target if it is being edited
+                or item.settings.target -- display stored value in all other cases
             ],
-            self.optionHoverIdx == idx and self.editing and self.fragment == 'target' and INVERS + BLINK or
-            self.optionHoverIdx == idx and (not self.fragment or self.fragment == 'target') and INVERS or 0
+            (self.optionHoverIdx == idx and state ~= mainMenuSwitchSelection) and INVERS + (
+              self.editing and state == mainMenuTargetSelection and BLINK or 0
+            ) or 0
           )
         else
           if selected == idx then
-            self.fragment = 'switch'
+            state = mainMenuSwitchSelection
           end
         end
     end
@@ -138,15 +152,17 @@ switchMenu = {
     catch = monitor_change(currentOption.switchRange) 
     if catch then
       self.submenuSwitchHoverIdx = catch.idx
-      currentSubmenuSetting.target = normalizeValue(catch.value) -- also store switch position
+      danglingSetting.target = normalizeValue(catch.value) -- also store switch position
     end
   
     for idx, switch in pairs (currentOption.switchRange) do
+      
       -- hover over saved switch upon first entering the screen
       if self.submenuSwitchHoverIdx == 0 and switch == currentOption.settings.switch then
         self.submenuSwitchHoverIdx = idx -- if the switch is detected by the monitor we will also take it's value,
       end
 
+      -- y position
       local itemsPerRow = 3
       local row = math.ceil(idx / itemsPerRow) + 1
       local yoffset = row * 9
@@ -155,7 +171,7 @@ switchMenu = {
           itemsPerRow = 2
       end
 
-      -- x
+      -- x position
       local column = (idx-1) % itemsPerRow + 1
       local itemWidth = ( screen.w / itemsPerRow )
       local xoffset = itemWidth * column - itemWidth / 2
@@ -165,20 +181,19 @@ switchMenu = {
         -- let the user know we sometimes also store the value if it was detected by displaying it behind the switch
         string.upper(switch)..( 
           self.submenuSwitchHoverIdx == idx and (
-            currentSubmenuSetting.target and ' ('..valuesMap[currentSubmenuSetting.target]..')' or ''
+            danglingSetting.target and ' ('..valuesMap[danglingSetting.target]..')' or ''
           ) or ''
         ), 
         CENTER + SMLSIZE + (self.submenuSwitchHoverIdx == idx and INVERS or 0))
       
       if self.submenuSwitchHoverIdx == idx then
-        currentSubmenuSetting.switch = switch -- store switch for saving
+        danglingSetting.switch = switch -- store switch for saving
       end
     end
   end
 }
 
 mainMenuSwitchSelection = {
-  fragment = 'switch',
   run = function(self)
     self.optionHoverIdx = mainMenu.optionHoverIdx 
     self.mainMenuScroll = mainMenu.mainMenuScroll
@@ -190,7 +205,6 @@ mainMenuSwitchSelection = {
 
 mainMenuTargetSelection = {
   editing = false,
-  fragment = 'target',
   run = function(self)
     self.optionHoverIdx = mainMenu.optionHoverIdx 
     self.mainMenuScroll = mainMenu.mainMenuScroll
@@ -200,7 +214,7 @@ mainMenuTargetSelection = {
   end
 }
 
-local state = mainMenu
+state = mainMenu
 local states = {
   [mainMenu] = {
     [EVT_ROT_RIGHT] = (function() -- scroll menu down
@@ -244,7 +258,7 @@ local states = {
     [EVT_ROT_RIGHT] = (function() -- toggle switch/target
       -- print('main menu event rotate right')
       if mainMenuTargetSelection.editing then
-        currentSubmenuSetting.target = (currentSubmenuSetting.target - 25) % 125 -- 25 : normalized step, 100: max value
+        danglingSetting.target = (danglingSetting.target - 25) % 125 -- 25 : normalized step, 100: max value
       else
         state = mainMenuSwitchSelection
       end
@@ -252,7 +266,7 @@ local states = {
     [EVT_ROT_LEFT] = (function() -- toggle switch/target
       -- print('main menu event rotate left')
       if mainMenuTargetSelection.editing then
-        currentSubmenuSetting.target = (currentSubmenuSetting.target + 25) % 125 -- 25 : normalized step, 100: max value
+        danglingSetting.target = (danglingSetting.target + 25) % 125 -- 25 : normalized step, 100: max value
       else
         state = mainMenuSwitchSelection
       end
@@ -260,7 +274,7 @@ local states = {
     [EVT_ENTER_BREAK] = (function() -- enter switchmenu or save target
       -- print('main menu event enter')
       if mainMenuTargetSelection.editing then
-        writeValue(currentSubmenuSetting.target)
+        commitSettings()
         mainMenuTargetSelection.editing = false
       else
         mainMenuTargetSelection.editing = true
@@ -268,6 +282,7 @@ local states = {
     end),
     [EVT_EXIT_BREAK] = (function() -- enter mainMenu
       -- print('main menu event exit')
+      clearDanglingSettings()
       if mainMenuTargetSelection.editing then
         mainMenuTargetSelection.editing = false
       else
@@ -283,7 +298,7 @@ local states = {
       if switchMenu.submenuSwitchHoverIdx > maxItems
         then switchMenu.submenuSwitchHoverIdx = 1
       end
-      currentSubmenuSetting.target = nil --clear monitored target
+      danglingSetting.target = nil --clear monitored target
     end),
     [EVT_ROT_LEFT] = (function() -- scroll to previous switch
       -- print('main menu event rotate left')
@@ -292,33 +307,22 @@ local states = {
         local maxItems = currentOption.switchRange == minimalSwitches and 2 or 10 -- handle overflow
         switchMenu.submenuSwitchHoverIdx = maxItems
       end
-      currentSubmenuSetting.target = nil --clear monitored target
+      danglingSetting.target = nil --clear monitored target
     end),
     [EVT_ENTER_BREAK] = (function() -- save switch and enter switchmenu or mainMenuSubselected
       -- print('main menu event enter')
-      writeSwitch()
+      commitSettings()
       switchMenu.submenuSwitchHoverIdx = 0
       state = mainMenu.targetsAvailable() and mainMenuSwitchSelection or mainMenu
     end),
     [EVT_EXIT_BREAK] = (function() -- enter switchmenu or mainMenuSubselected
       -- print('main menu event exit')
+      clearDanglingSettings()
       switchMenu.submenuSwitchHoverIdx = 0
       state = mainMenu.targetsAvailable() and mainMenuSwitchSelection or mainMenu
     end),
   },
 }
-
-local oldMonitorValues = {}
-function monitor_change(array)
-  for idx, switch in pairs(array) do
-    actual = getValue(switch)
-    if oldMonitorValues[idx] and oldMonitorValues[idx] ~= actual then
-      oldMonitorValues = {}
-      return { idx = idx, switch = switch, value = actual }
-    end
-    oldMonitorValues[idx] = actual
-  end
-end
 
 function shared.run(event)
 
