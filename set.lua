@@ -38,12 +38,14 @@ end
 local oldMonitorValues = {}
 function monitor_change(array)
   for idx, switch in pairs(array) do
-    actual = getValue(switch)
-    if oldMonitorValues[idx] and oldMonitorValues[idx] ~= actual then
-      oldMonitorValues = {}
-      return { idx = idx, switch = switch, value = actual }
+    if not (switch == 'On' or switch == 'Disabled') then -- continue to next iteration
+      actual = getValue(switch)
+      if oldMonitorValues[idx] and oldMonitorValues[idx] ~= actual then
+        oldMonitorValues = {}
+        return { idx = idx, switch = switch, value = actual }
+      end
+      oldMonitorValues[idx] = actual -- store for future comparison
     end
-    oldMonitorValues[idx] = actual
   end
 end
 
@@ -117,10 +119,6 @@ mainMenu = {
               self.editing and state == mainMenuTargetSelection and BLINK or 0
             ) or 0
           )
-        else
-          if selected == idx then
-            state = mainMenuSwitchSelection
-          end
         end
     end
   end
@@ -131,7 +129,7 @@ switchMenu = {
   submenuSwitchHoverIdx = 0,
   run = function(self)
     local headline = ' '..currentOption.name..' '
-    
+
     --(currentOption.switchRange == minimalSwitches and ' [ On | Off ]' or ' [ Switch | On | Off ]')
     lcd.drawText(
       0, 
@@ -139,13 +137,13 @@ switchMenu = {
       headline, 
       INVERS + LEFT
     )
-    
+
     catch = monitor_change(currentOption.switchRange) 
     if catch then
       self.submenuSwitchHoverIdx = catch.idx
       danglingSetting.target = normalizeValue(catch.value) -- also store switch position
     end
-  
+
     for idx, switch in pairs (currentOption.switchRange) do
       
       -- hover over saved switch upon first entering the screen
@@ -276,8 +274,11 @@ local states = {
     [EVT_ENTER_BREAK] = (function() -- enter switchmenu or save target
       -- print('main menu event enter')
       if mainMenuTargetSelection.editing then
-        commitSettings()
         mainMenuTargetSelection.editing = false
+        commitSettings()
+        if not mainMenu.targetsAvailable() then
+          state = mainMenuSwitchSelection
+        end
       else
         mainMenuTargetSelection.editing = true
       end
@@ -331,7 +332,7 @@ local states = {
 }
 
 function shared.run(event)
-
+  
   -- handle events
   local destination = states[state][event]
   if(destination) then -- check if the state cares about the event
