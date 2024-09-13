@@ -311,9 +311,13 @@ local states = {
     end),
     [EVT_ENTER_BREAK] = (function() -- save switch and enter switchmenu or mainMenuSubselected
       -- print('main menu event enter')
+      local storedTarget = danglingSetting.target ~= nil
       commitSettings()
       switchMenu.submenuSwitchHoverIdx = 0
-      state = mainMenu.targetsAvailable() and mainMenuSwitchSelection or mainMenu
+      state = ( -- jump directly to the mainMenu if a target was detected or after the selection none are Available anymore
+          not mainMenu.targetsAvailable()
+          or storedTarget
+        ) and mainMenu or mainMenuSwitchSelection
     end),
     [EVT_EXIT_BREAK] = (function() -- enter switchmenu or mainMenuSubselected
       -- print('main menu event exit')
