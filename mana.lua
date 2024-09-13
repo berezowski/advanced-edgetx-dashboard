@@ -170,48 +170,27 @@ local function run(event)
         end
     end
 
-    if isPressed(shared.switchSettings.pitmode) then
-      shared.pitmode = true
-    else
-      shared.pitmode = false
-    end
+    shared.pitmode = isEnabled(shared.switchSettings.pitmode) and isPressed(shared.switchSettings.pitmode)
     
-    
-    if isPressed(shared.switchSettings.arm) and shared.rssi == 0 then
-        shared.noConnectionMSG = true
-    else
-        shared.noConnectionMSG = false
-    end
-
-    -- arm / prearm checks
-    if isEnabled(shared.switchSettings.prearm) and shared.rssi ~= 0 then
-      shared.noPrearm = false 
+    ;(function(signal, preamEnabled, prearmPressed, alreadyArmed, armPressed) -- Armingrelated
+        
+      ---------------------- =   Arm Button   - rssi         - prearm Enabled     - Prearm Button        - Arm Hysteresis
+      shared.noConnectionMSG =   armPressed and not signal
       
-      if isPressed(shared.switchSettings.prearm) then
-          shared.isPrearmed = true
-      else
-          shared.isPrearmed = false
-      end
-    
-      if shared.isPrearmed 
-        or shared.isArmed
-        and isPressed(shared.switchSettings.arm)
-        then
-          shared.isArmed = true
-      else
-        shared.noPrearm = true
-        shared.isArmed = false
-      end
-    else -- prearm disabled
-      if isPressed(shared.switchSettings.arm)
-        and (shared.isPrearmed or shared.isArmed)
-        and shared.rssi ~= 0 
-      then
-        shared.isArmed = true
-      else
-        shared.isArmed = false
-      end
-    end -- end arming checks
+      shared.noPrearm        =  (armPressed and     signal and     preamEnabled and not(prearmPressed) and not(alreadyArmed) )
+                             or                                    preamEnabled
+                             
+      shared.isArmed         =  (armPressed and     signal and     preamEnabled and     prearmPressed)
+                             or (armPressed and     signal and     preamEnabled and                            alreadyArmed  )
+                             or (armPressed and     signal and not(preamEnabled))
+                      
+      end)( -- params reminder: (signal, preamEnabled, prearmPressed, wasArmed, armPressed)
+        shared.rssi ~= 0,
+        isEnabled(shared.switchSettings.prearm),
+        isPressed(shared.switchSettings.prearm), 
+        shared.isArmed,
+        isPressed(shared.switchSettings.arm)
+      )
     
 end
   

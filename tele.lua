@@ -157,16 +157,12 @@ local function drawQuadcopter(x, y)
     
     if shared.pitmode then
       -- Increase Body
-      lcd.drawFilledRectangle(x + 8, y + 8, 15, 15, ERASE)
-      lcd.drawFilledRectangle(x + 10, y + 10, 11, 11, FORCE)
-      lcd.drawFilledRectangle(x + 12, y + 9, 7, 13, FORCE)
-      lcd.drawFilledRectangle(x + 9, y + 12, 13, 7, FORCE)
-      --lcd.drawFilledRectangle(x + 12, y + 9, 7, 13, FORCE)
+      lcd.drawFilledRectangle(x + 5, y + 10, 21, 11, FORCE)
       -- Blind Dots / Pit Mode
-      drawDot(x + 11, y + 13)
-      drawDot(x + 17, y + 12)
-      drawDot(x + 15, y + 17)
-      
+      offx = -1
+      drawDot(offx + x + 11, y + 12)
+      drawDot(offx + x + 19, y + 12)
+      drawDot(offx + x + 15, y + 16)
       
       --lcd.drawFilledRectangle(x + 17, y + 12, 3, 3, ERASE)
       
