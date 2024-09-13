@@ -173,15 +173,13 @@ local function run(event)
     shared.pitmode = isEnabled(shared.switchSettings.pitmode) and isPressed(shared.switchSettings.pitmode)
     
     ;(function(signal, preamEnabled, prearmPressed, alreadyArmed, armPressed) -- Armingrelated
-        
-      ---------------------- =   Arm Button   - rssi         - prearm Enabled     - Prearm Button        - Arm Hysteresis
-      shared.noConnectionMSG =   armPressed and not signal
       
-      shared.noPrearm        =  (armPressed and     signal and     preamEnabled and not(prearmPressed) and not(alreadyArmed) )
-                             or                                    preamEnabled
-                             
-      shared.isArmed         =  (armPressed and     signal and     preamEnabled and     prearmPressed)
-                             or (armPressed and     signal and     preamEnabled and                            alreadyArmed  )
+      ---------------------- =   Arm Button   - rssi         - prearm Enabled     - Prearm Button      - Arm Hysteresis
+      shared.noConnectionMSG =   armPressed and not signal
+
+      shared.noPrearm        =  (armPressed and                    preamEnabled and not( prearmPressed or alreadyArmed ) )
+
+      shared.isArmed         =  (armPressed and     signal and     preamEnabled and    ( prearmPressed or alreadyArmed ) )
                              or (armPressed and     signal and not(preamEnabled))
                       
       end)( -- params reminder: (signal, preamEnabled, prearmPressed, wasArmed, armPressed)
